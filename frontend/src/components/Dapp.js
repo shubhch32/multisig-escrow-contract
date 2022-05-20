@@ -6,6 +6,8 @@ import { ethers } from "ethers";
 // We import the contract's artifacts and address here, as we are going to be
 // using them with ethers
 import TokenArtifact from "../contracts/Token.json";
+import MultiSigArtifact from "../contracts/MultiSig.json";
+import EscrowArtifact from "../contracts/Escrow.json";
 import contractAddress from "../contracts/contract-address.json";
 
 // All the logic of this dapp is contained in the Dapp component.
@@ -18,6 +20,12 @@ import { Transfer } from "./Transfer";
 import { TransactionErrorMessage } from "./TransactionErrorMessage";
 import { WaitingForTransactionMessage } from "./WaitingForTransactionMessage";
 import { NoTokensMessage } from "./NoTokensMessage";
+import { SubmitMultiTransaction } from "./SubmitMultiTransaction";
+import { ConfirmMultiTransaction } from "./ConfirmMultiTransaction";
+import { ExecuteMultiTransaction } from "./ExecuteMultiSigTransaction";
+import { DepositInEscrow } from "./DepositInEscrow";
+import { Approve } from "./Approve";
+import { Withdraw } from "./WithdrawFromEscrow";
 
 // This is the Hardhat Network id, you might change it in the hardhat.config.js.
 // If you are using MetaMask, be sure to change the Network id to 1337.
@@ -158,6 +166,159 @@ export class Dapp extends React.Component {
             )}
           </div>
         </div>
+
+        <div className="row">
+          <div className="col-12">
+            <h1>
+              Interactions with the Multisig Wallet
+            </h1>
+          </div>
+        </div>
+
+        <hr />
+
+        <div className="row">
+          <div className="col-12">
+            {/*
+              If the user has no tokens, we don't show the Transfer form
+            */}
+
+            {/*
+              This component displays a form that the user can use to send a
+              transaction and transfer some tokens.
+              The component doesn't have logic, it just calls the transferTokens
+              callback.
+            */}
+            {(
+              <SubmitMultiTransaction
+                submitTransaction={(dest, value) =>
+                  this._submitTransaction(dest, value)
+                }
+              />
+            )}
+          </div>
+        </div>
+
+        <div className="row">
+          <div className="col-12">
+            {/*
+              If the user has no tokens, we don't show the Transfer form
+            */}
+
+            {/*
+              This component displays a form that the user can use to send a
+              transaction and transfer some tokens.
+              The component doesn't have logic, it just calls the transferTokens
+              callback.
+            */}
+            {(
+              <ConfirmMultiTransaction
+                confirmTransaction={(transactionId) =>
+                  this._confirmTransaction(transactionId)
+                }
+              />
+            )}
+          </div>
+        </div>
+
+        <div className="row">
+          <div className="col-12">
+            {/*
+              If the user has no tokens, we don't show the Transfer form
+            */}
+
+            {/*
+              This component displays a form that the user can use to send a
+              transaction and transfer some tokens.
+              The component doesn't have logic, it just calls the transferTokens
+              callback.
+            */}
+            {(
+              <ExecuteMultiTransaction
+                executeTransaction={(transactionId) =>
+                  this._executeTransaction(transactionId)
+                }
+              />
+            )}
+          </div>
+        </div>
+
+        <div className="row">
+          <div className="col-12">
+            <h1>
+              Interactions with the Escrow | Contract Claim Token Id = {this.state.claimTokenId}
+            </h1>
+          </div>
+        </div>
+
+        <hr />
+
+        <div className="row">
+          <div className="col-12">
+            {/*
+              If the user has no tokens, we don't show the Transfer form
+            */}
+
+            {/*
+              This component displays a form that the user can use to send a
+              transaction and transfer some tokens.
+              The component doesn't have logic, it just calls the transferTokens
+              callback.
+            */}
+            {(
+              <Approve
+                approve={(amount) =>
+                  this._approve(amount)
+                }
+              />
+            )}
+          </div>
+        </div>
+
+        <div className="row">
+          <div className="col-12">
+            {/*
+              If the user has no tokens, we don't show the Transfer form
+            */}
+
+            {/*
+              This component displays a form that the user can use to send a
+              transaction and transfer some tokens.
+              The component doesn't have logic, it just calls the transferTokens
+              callback.
+            */}
+            {(
+              <DepositInEscrow
+                deposit={(token, recipient, amount, endTime) =>
+                  this._deposit(token, recipient, amount, endTime)
+                }
+              />
+            )}
+          </div>
+        </div>
+
+        <div className="row">
+          <div className="col-12">
+            {/*
+              If the user has no tokens, we don't show the Transfer form
+            */}
+
+            {/*
+              This component displays a form that the user can use to send a
+              transaction and transfer some tokens.
+              The component doesn't have logic, it just calls the transferTokens
+              callback.
+            */}
+            {(
+              <Withdraw
+                withdraw={() =>
+                  this._withdraw()
+                }
+              />
+            )}
+          </div>
+        </div>
+
       </div>
     );
   }
@@ -179,9 +340,9 @@ export class Dapp extends React.Component {
     // Once we have the address, we can initialize the application.
 
     // First we check the network
-    if (!this._checkNetwork()) {
-      return;
-    }
+//    if (!this._checkNetwork()) {
+//      return;
+//    }
 
     this._initialize(selectedAddress);
 
@@ -235,6 +396,20 @@ export class Dapp extends React.Component {
       TokenArtifact.abi,
       this._provider.getSigner(0)
     );
+
+    //Now, we initialize the multisig contract in the same way
+    this._multisig = new ethers.Contract(
+      contractAddress.MultiSig,
+      MultiSigArtifact.abi,
+      this._provider.getSigner(0)
+    )
+
+    //Here we initialize the escrow contract in the same way
+    this._escrow = new ethers.Contract(
+      contractAddress.Escrow,
+      EscrowArtifact.abi,
+      this._provider.getSigner(0)
+    )
   }
 
   // The next two methods are needed to start and stop polling data. While
@@ -261,8 +436,22 @@ export class Dapp extends React.Component {
   async _getTokenData() {
     const name = await this._token.name();
     const symbol = await this._token.symbol();
+    var claimDetails;
+    console.log("Fetching Claim Details");
+    try{
+      claimDetails = await this._escrow.getClaimDetails(this.state.selectedAddress);
+    } catch(error) {
+      console.log(error);
+    }
+    console.log(claimDetails);
+    var claimTokenId = claimDetails[1].toString();
+    if(!claimTokenId){
+      claimTokenId = "No Tokens to be claimed";
+    }
+    console.log("Fetched Claim Details");
 
     this.setState({ tokenData: { name, symbol } });
+    this.setState({claimTokenId});
   }
 
   async _updateBalance() {
@@ -367,4 +556,42 @@ export class Dapp extends React.Component {
 
     return false;
   }
+
+  //MultiSig Functions start from here
+
+  async _submitTransaction(dest, val) {
+    await this._multisig.submitTransaction(dest, val, "0x00");
+  }
+
+  async _confirmTransaction(transactionId) {
+    await this._multisig.confirmTransaction(transactionId);
+  }
+
+  async _executeTransaction(transactionId) {
+    await this._multisig.executeTransaction(transactionId);
+  }
+
+  async _approve(amount) {
+    await this._token.approve(this._escrow.address, amount);
+  }
+
+  async _deposit(token, recipient, amount, endTime) {
+    var assets = [new Asset(token, recipient, amount, endTime)];
+    console.log(assets);
+    await this._escrow.deposit(assets);
+  }
+
+  async _withdraw() {
+    await this._escrow.withdraw();
+  }
+
+
+
+}
+
+function Asset(token, recipient, amount, endTime) {
+  this.token = token;
+  this.recipient = recipient;
+  this.amount = amount;
+  this.endTime = endTime;
 }
